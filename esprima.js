@@ -245,7 +245,8 @@ parseYieldExpression: true, parseForVariableDeclaration: true
         NoUnintializedConst: 'Const must be initialized',
         ComprehensionRequiresBlock: 'Comprehension must have at least one block',
         ComprehensionError:  'Comprehension Error',
-        EachNotAllowed:  'Each is not supported'
+        EachNotAllowed:  'Each is not supported',
+        XMLTagMismatch:  'XML tag name mismatch (expected %0)'
     };
 
     // See also tools/generate-unicode-regex.py.
@@ -3249,7 +3250,7 @@ parseYieldExpression: true, parseForVariableDeclaration: true
     }
 
     function parseXMLName() {
-        return delegate.createXMLName(lex());
+        return delegate.createXMLName(lex().value);
     }
 
     function parseXMLAttribute() {
@@ -3334,7 +3335,7 @@ parseYieldExpression: true, parseForVariableDeclaration: true
     }
 
     function parseXMLElement() {
-        var start, contents;
+        var start, end, contents;
 
         start = parseXMLStartTag();
         contents = [ start ];
@@ -3345,8 +3346,13 @@ parseYieldExpression: true, parseForVariableDeclaration: true
 
         parseXMLElementContents(contents);
 
-        contents.push(parseXMLEndTag());
+        end = parseXMLEndTag()
+        contents.push(end);
 
+        if (start.contents[0].type === Syntax.XMLName && end.contents[0].type === Syntax.XMLName &&
+                start.contents[0].contents !== end.contents[0].contents) {
+            throwErrorTolerant({}, Messages.XMLTagMismatch, start.contents[0].contents);
+        }
         return delegate.createXMLElement(contents);
     }
 
