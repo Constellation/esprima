@@ -3278,10 +3278,16 @@ parseYieldExpression: true, parseForVariableDeclaration: true
         // XMLAttributes
         while (lookahead.type === Token.XMLWhiteSpace) {
             lex();  // XMLWhiteSpace
-            if (lookahead.type !== Token.XMLName) {
-                break;
+
+            // This is ECMA357 bug
+            if (match('{')) {
+                contents.push(parseXMLEscape());
+            } else {
+                if (lookahead.type !== Token.XMLName) {
+                    break;
+                }
+                contents.push(parseXMLName());
             }
-            contents.push(parseXMLName());
 
             if (lookahead.type === Token.XMLWhiteSpace) {
                 lex();
