@@ -644,9 +644,8 @@ parseYieldExpression: true, parseForVariableDeclaration: true
     }
 
     function enableE4X() {
-        e4x = true;
-        lookahead = null;
         peek();
+        e4x = true;
     }
 
     function scanXMLComment() {
@@ -3193,52 +3192,36 @@ parseYieldExpression: true, parseForVariableDeclaration: true
         return delegate.createXMLFunctionQualifiedIdentifier(expr, computed);
     }
 
-    function parseXMLAttribute() {
-        var name, value, escaped;
+    function parseXMLEscape() {
+        var expr;
 
-        escaped = false;
+        lex();
+        e4x = false;
+        lookahead = null;
+        peek();
 
-        lex();  // XMLWhiteSpace
+        expr = parseExpression();
+        expect('}');
 
-        if (lookahead.type !== Token.XMLName) {
-            return null;
-        }
+        e4x = true;
+        lookahead = null;
+        peek();
 
-        name = lex();
+        return delegate.createXMLEscape(expr);
+    }
 
-        if (lookahead.type === Token.XMLWhiteSpace) {
-            lex();
-        }
+    function parseXMLMarkup() {
+        return parsePrimaryExpression();
+    }
 
-        expect('=');
-
-        if (lookahead.type === Token.XMLWhiteSpace) {
-            lex();
-        }
-
-        if (match('{')) {
-            escaped = true;
-            disableE4X();
-            lex();
-            value = parseExpression();
-            expect('}');
-            enableE4X();
-        } else {
-            if (lookahead.type !== Token.StringLiteral) {
-                throwUnexpected(lex());
-            }
-            value = lex();
-        }
-
-        return {
-            name: name,
-            value: value,
-            escaped: escaped
-        };
+    function parseXMLText() {
+        return delegate.createXMLText(lex());
     }
 
     function parseXMLElementContents() {
-        var type;
+        var type, contents;
+
+        contents = [];
 
         while (true) {
             type = lookahead.type;
@@ -3247,122 +3230,165 @@ parseYieldExpression: true, parseForVariableDeclaration: true
                 break;
             }
 
-            if (type === Token.XMLComment) {
-                delegate.createXMLComment(lex());
-                continue;
+            if (type === Token.EOF) {
+                throwUnexpected(lex());
             }
 
-            if (type === Token.XMLCdata) {
-                delegate.createXMLCdata(lex());
-                continue;
+            if (type === Token.XMLComment ||
+                    type === Token.XMLCdata ||
+                    type === Token.XMLProcessingInstruction) {
+                contents.push(parseXMLMarkup());
+            } else if (match('{')) {
+                contents.push(parseXMLEscape());
+            } else if (match('<')) {
+                contents.push(parseXMLElement());
+            } else {
+                contents.push(parseXMLText());
             }
-
-            if (type === Token.XMLProcessingInstruction) {
-                delegate.createXMLProcessingInstruction(lex());
-                continue;
-            }
-
-            if (match('{')) {
-                disableE4X();
-                lex();
-                expr = parseExpression();
-                expect('}');
-                enableE4X();
-                continue;
-            }
-
-            if (match('<')) {
-                parseXMLElement();
-                continue;
-            }
-
-            if (type !== Token.EOF) {
-                delegate.createXMLText(lex());
-                continue;
-            }
-
-            throwUnexpected(lex());
         }
+
+        return contents;
     }
 
-    function parseXMLElement() {
-        var name, expr, attr, contents;
+    function parseXMLName() {
+        return delegate.createXMLName(lex());
+    }
 
-        contents = [];
+    function parseXMLAttribute() {
+        return delegate.createXMLAttribute(lex().value);
+    }
+
+    function parseXMLStartTag() {
+        var contents;
 
         // start tag
         expect('<');
-        enableE4X();
+
+        contents = [];
 
         // XMLTagName
         if (match('{')) {
-            disableE4X();
-            lex();
-            expr = parseExpression();
-            expect('}');
-            enableE4X();
+            contents.push(parseXMLEscape());
         } else {
             if (lookahead.type !== Token.XMLName) {
                 throwUnexpected(lex());
             }
-            name = lex();
+            contents.push(parseXMLName());
         }
 
         // XMLAttributes
         while (lookahead.type === Token.XMLWhiteSpace) {
-            attr = parseXMLAttribute();
-            if (!attr) {
+            lex();  // XMLWhiteSpace
+            if (lookahead.type !== Token.XMLName) {
                 break;
             }
-            contents.push(attr);
+            contents.push(parseXMLName());
+
+            if (lookahead.type === Token.XMLWhiteSpace) {
+                lex();
+            }
+
+            expect('=');
+
+            if (lookahead.type === Token.XMLWhiteSpace) {
+                lex();
+            }
+
+            if (match('{')) {
+                contents.push(parseXMLEscape());
+            } else {
+                if (lookahead.type !== Token.StringLiteral) {
+                    throwUnexpected(lex());
+                }
+                contents.push(parseXMLAttribute());
+            }
         }
 
         // end of start tag
         if (match('/>')) {
-            disableE4X();
             lex();
-            return delegate.createXMLElement(contents);
+            return delegate.createXMLPointTag(contents);
         }
 
         expect('>');
+        return delegate.createXMLStartTag(contents);
+    }
 
-        parseXMLElementContents();
-
-        // end tag
+    function parseXMLEndTag() {
+        var contents;
         expect('</');
 
-
         if (match('{')) {
-            disableE4X();
-            lex();
-            expr = parseExpression();
-            expect('}');
-            enableE4X();
+            contents = [ parseXMLEscape() ];
         } else {
             if (lookahead.type !== Token.XMLName) {
                 throwUnexpected(lex());
             }
-            name = lex();
+            contents = [ parseXMLName() ];
         }
 
         if (lookahead.type === Token.XMLWhiteSpace) {
             lex();
         }
         expect('>');
+
+        return delegate.createXMLEndTag(contents);
+    }
+
+    function parseXMLElement() {
+        var start, contents, end;
+
+        start = parseXMLStartTag();
+
+        if (start.type === Syntax.XMLPointTag) {
+            return delegate.createXMLElement([ start ]);
+        }
+
+        contents = parseXMLElementContents();
+
+        end = parseXMLEndTag();
+
+        contents.unshift(start);
+        contents.push(end);
+
+        return delegate.createXMLElement(contents);
+    }
+
+    function parseXMLInitialiser() {
+        var start, contents, end;
+
+        enableE4X();
+
+        start = parseXMLStartTag();
+
+        if (start.type === Syntax.XMLPointTag) {
+            disableE4X();
+            return delegate.createXMLElement([ start ]);
+        }
+
+        contents = parseXMLElementContents();
+
+        end = parseXMLEndTag();
+
+        contents.unshift(start);
+        contents.push(end);
+
         disableE4X();
 
-        return delegate.createXMLElement([]);
+        return delegate.createXMLElement(contents);
     }
 
     function parseXMLListInitialiser() {
-        var contents = [];
-        expect('<>');
+        var contents;
+
         enableE4X();
 
-        parseXMLElementContents();
-
+        expect('<>');
+        contents = parseXMLElementContents();
         expect('</>');
+
         disableE4X();
+
         return delegate.createXMLList(contents);
     }
 
@@ -3455,8 +3481,7 @@ parseYieldExpression: true, parseForVariableDeclaration: true
         }
 
         if (match('<')) {
-            type = parseXMLElement();
-            return type;
+            return parseXMLInitialiser();
         }
 
         if (type === Token.Template) {
