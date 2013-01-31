@@ -3218,10 +3218,8 @@ parseYieldExpression: true, parseForVariableDeclaration: true
         return delegate.createXMLText(lex());
     }
 
-    function parseXMLElementContents() {
-        var type, contents;
-
-        contents = [];
+    function parseXMLElementContents(contents) {
+        var type;
 
         while (true) {
             type = lookahead.type;
@@ -3336,46 +3334,32 @@ parseYieldExpression: true, parseForVariableDeclaration: true
     }
 
     function parseXMLElement() {
-        var start, contents, end;
+        var start, contents;
 
         start = parseXMLStartTag();
+        contents = [ start ];
 
         if (start.type === Syntax.XMLPointTag) {
-            return delegate.createXMLElement([ start ]);
+            return delegate.createXMLElement(contents);
         }
 
-        contents = parseXMLElementContents();
+        parseXMLElementContents(contents);
 
-        end = parseXMLEndTag();
-
-        contents.unshift(start);
-        contents.push(end);
+        contents.push(parseXMLEndTag());
 
         return delegate.createXMLElement(contents);
     }
 
     function parseXMLInitialiser() {
-        var start, contents, end;
+        var result;
 
         enableE4X();
 
-        start = parseXMLStartTag();
-
-        if (start.type === Syntax.XMLPointTag) {
-            disableE4X();
-            return delegate.createXMLElement([ start ]);
-        }
-
-        contents = parseXMLElementContents();
-
-        end = parseXMLEndTag();
-
-        contents.unshift(start);
-        contents.push(end);
+        result = parseXMLElement();
 
         disableE4X();
 
-        return delegate.createXMLElement(contents);
+        return result;
     }
 
     function parseXMLListInitialiser() {
@@ -3383,8 +3367,9 @@ parseYieldExpression: true, parseForVariableDeclaration: true
 
         enableE4X();
 
+        contents = [];
         expect('<>');
-        contents = parseXMLElementContents();
+        parseXMLElementContents(contents);
         expect('</>');
 
         disableE4X();
@@ -6081,6 +6066,15 @@ parseYieldExpression: true, parseForVariableDeclaration: true
             extra.parseXMLDefaultDeclaration = parseXMLDefaultDeclaration;
             extra.parseXMLForEachStatement = parseXMLForEachStatement;
             extra.parseXMLFunctionQualifiedIdentifier = parseXMLFunctionQualifiedIdentifier;
+            extra.parseXMLListInitialiser = parseXMLListInitialiser;
+            extra.parseXMLElement = parseXMLElement;
+            extra.parseXMLName = parseXMLName;
+            extra.parseXMLAttribute = parseXMLAttribute;
+            extra.parseXMLText = parseXMLText;
+            extra.parseXMLEscape = parseXMLEscape;
+            extra.parseXMLStartTag = parseXMLStartTag;
+            extra.parseXMLEndTag = parseXMLEndTag;
+
 
             parseAssignmentExpression = wrapTracking(extra.parseAssignmentExpression);
             parseBinaryExpression = wrapTracking(extra.parseBinaryExpression);
@@ -6134,6 +6128,14 @@ parseYieldExpression: true, parseForVariableDeclaration: true
             parseXMLDefaultDeclaration = wrapTracking(extra.parseXMLDefaultDeclaration);
             parseXMLForEachStatement = wrapTracking(extra.parseXMLForEachStatement);
             parseXMLFunctionQualifiedIdentifier = wrapTracking(extra.parseXMLFunctionQualifiedIdentifier);
+            parseXMLListInitialiser = wrapTracking(extra.parseXMLListInitialiser);
+            parseXMLElement = wrapTracking(extra.parseXMLElement);
+            parseXMLName = wrapTracking(extra.parseXMLName);
+            parseXMLAttribute = wrapTracking(extra.parseXMLAttribute);
+            parseXMLText = wrapTracking(extra.parseXMLText);
+            parseXMLEscape = wrapTracking(extra.parseXMLEscape);
+            parseXMLStartTag = wrapTracking(extra.parseXMLStartTag);
+            parseXMLEndTag = wrapTracking(extra.parseXMLEndTag);
         }
 
         if (typeof extra.tokens !== 'undefined') {
@@ -6204,6 +6206,14 @@ parseYieldExpression: true, parseForVariableDeclaration: true
             parseXMLDefaultDeclaration = extra.parseXMLDefaultDeclaration;
             parseXMLForEachStatement = extra.parseXMLForEachStatement;
             parseXMLFunctionQualifiedIdentifier = extra.parseXMLFunctionQualifiedIdentifier;
+            parseXMLListInitialiser = extra.parseXMLListInitialiser;
+            parseXMLElement = extra.parseXMLElement;
+            parseXMLName = extra.parseXMLName;
+            parseXMLAttribute = extra.parseXMLAttribute;
+            parseXMLText = extra.parseXMLText;
+            parseXMLEscape = extra.parseXMLEscape;
+            parseXMLStartTag = extra.parseXMLStartTag;
+            parseXMLEndTag = extra.parseXMLEndTag;
         }
 
         if (typeof extra.scanRegExp === 'function') {
